@@ -87,7 +87,5 @@ Due to limitations in Azure it is not supported to use ExportSwaggerDefinition=$
 
 `armclient token 80d4fe69-xxxx-4dd2-a938-9250f1c8ab03 | Get-APIManagementTemplate -APIManagement MyApiManagementInstance -ResourceGroup myResourceGroup -SubscriptionId 80d4fe69-xxxx-4dd2-a938-9250f1c8ab03 -ParametrizePropertiesOnly $true -FixedServiceNameParameter $true -CreateApplicationInsightsInstance $true -ReplaceSetBackendServiceBaseUrlWithProperty $true -ExportSwaggerDefinition $true | Write-APIManagementTemplates -OutputDirectory C:\temp\templates -ApiStandalone $true -SeparatePolicyFile $true -SeparateSwaggerFile $true -MergeTemplates $true -GenerateParameterFiles $true  -ReplaceListSecretsWithParameter $true -ListApiInProduct $false`
 
-If you have a host property in your OpenAPI/Swagger definition it will override the serviceUrl property of your API. 
-So if you want to have different serviceUrls for different environments (for example test and production environments) you need to do one of the following two options
-* Write a policy that changes the backend url
-* Modify the OpenAPI/Swagger definition file so that it contains the correct url in host, basePath and schemes before you deploy it
+This module export the host property to your OpenAPI/Swagger definition. However it will be overridden by the serviceUrl property of your *.swagger.templat file.
+By adding this serviceUri as a parameter this enables you to have different serviceUrls for different environments (for example test and production environments).
