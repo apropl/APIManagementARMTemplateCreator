@@ -31,7 +31,18 @@ namespace APIManagementTemplate
             return FileName;
         }
 
-    }
+        public static string GetDeploymentName(string name)
+        {
+          const int maximumDeploymentNameLength = 64;
+          const int hashLength = 4;
+          if (name.Length > maximumDeploymentNameLength)
+          {
+            // Generate a fixed length random ending for the deployment if maximum length is passed
+            name = $"{name.Substring(0, maximumDeploymentNameLength- hashLength)}{ Convert.ToString(Math.Abs(name.GetHashCode())).PadRight(hashLength, '0').Substring(0, hashLength)}";
+          }
+          return name;
+        }
+  }
 
     public class FileInfo
     {
@@ -253,7 +264,7 @@ namespace APIManagementTemplate
             var deployment = new
             {
                 apiVersion = "2017-05-10",
-                name = template2.GetShortPath(),
+                name = GeneratedTemplate.GetDeploymentName(template2.GetShortPath()),
                 type = "Microsoft.Resources/deployments",
                 properties = new
                 {
@@ -281,7 +292,7 @@ namespace APIManagementTemplate
                 if (matches.Any())
                 {
                     var match = matches.First();
-                    dependsOn.Add($"[resourceId('Microsoft.Resources/deployments', '{match.GetShortPath()}')]");
+                    dependsOn.Add($"[resourceId('Microsoft.Resources/deployments', '{GeneratedTemplate.GetDeploymentName(match.GetShortPath())}')]");
                 }
                 else
                 {
@@ -289,7 +300,7 @@ namespace APIManagementTemplate
                 }
             }
             if (template.FileName.EndsWith(".swagger.template.json"))
-                dependsOn.Add($"[resourceId('Microsoft.Resources/deployments', '{template.FileName.Replace(".swagger.template.json", ".template.json")}')]");
+                dependsOn.Add($"[resourceId('Microsoft.Resources/deployments', '{GeneratedTemplate.GetDeploymentName(template.FileName.Replace(".swagger.template.json", ".template.json"))}')]");
             return dependsOn;
         }
 
@@ -371,7 +382,7 @@ namespace APIManagementTemplate
             JObject item = JObject.FromObject(api);
             var fileInfo = GetFilenameAndDirectoryForSwaggerFile(api, parsedTemplate);
             ReplaceSwaggerWithFileLink(item, fileInfo);
-            var allowed = new[] { "contentFormat", "contentValue", "path" };
+            var allowed = new[] { "contentFormat", "contentValue", "path", "serviceUrl", "protocols" };
             item["properties"].Cast<JProperty>().Where(p => !allowed.Any(a => a == p.Name)).ToList().ForEach(x => x.Remove());
             item["resources"].Where(x => _swaggerTemplateApiResourceTypes.All(r => r != x.Value<string>("type")) )
                 .ToList().ForEach(x => x.Remove());
