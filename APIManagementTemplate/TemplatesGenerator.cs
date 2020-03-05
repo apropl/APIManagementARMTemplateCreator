@@ -89,12 +89,12 @@ namespace APIManagementTemplate
         private const string MasterTemplateJson = "master.template.json";
         private const string ProductAPIResourceType = "Microsoft.ApiManagement/service/products/apis";
 
-        public IList<GeneratedTemplate> Generate(string sourceTemplate, bool apiStandalone, bool separatePolicyFile = false, bool generateParameterFiles = false, bool replaceListSecretsWithParameter = false, bool listApiInProduct = false, bool separateSwaggerFile = false, bool alwaysAddPropertiesAndBackend = false)
+        public IList<GeneratedTemplate> Generate(string sourceTemplate, bool apiStandalone, bool separatePolicyFile = false, bool generateParameterFiles = false, bool replaceListSecretsWithParameter = false, bool listApiInProduct = false, bool separateSwaggerFile = false, bool alwaysAddPropertiesAndBackend = false, bool mergeTemplateForLogicAppBackendAndProperties = false)
         {
             JObject parsedTemplate = JObject.Parse(sourceTemplate);
             if (replaceListSecretsWithParameter)
                 ReplaceListSecretsWithParameter(parsedTemplate);
-            List<GeneratedTemplate> templates = GenerateAPIsAndVersionSets(apiStandalone, parsedTemplate, separatePolicyFile, separateSwaggerFile);
+            List<GeneratedTemplate> templates = GenerateAPIsAndVersionSets(apiStandalone, parsedTemplate, separatePolicyFile, separateSwaggerFile, mergeTemplateForLogicAppBackendAndProperties);
             templates.AddRange(GenerateProducts(parsedTemplate, separatePolicyFile, apiStandalone, listApiInProduct));
             templates.AddRange(GenerateService(parsedTemplate, separatePolicyFile, alwaysAddPropertiesAndBackend));
             templates.Add(GenerateTemplate(parsedTemplate, "subscriptions.template.json", String.Empty, SubscriptionResourceType));
@@ -390,7 +390,7 @@ namespace APIManagementTemplate
         }
 
         private List<GeneratedTemplate> GenerateAPIsAndVersionSets(bool apiStandalone, JObject parsedTemplate,
-            bool separatePolicyFile, bool separateSwaggerFile)
+            bool separatePolicyFile, bool separateSwaggerFile, bool mergeTemplateForLogicAppBackendAndProperties)
         {
             var apis = parsedTemplate["resources"].Where(rr => rr["type"].Value<string>() == ApiResourceType);
             List<GeneratedTemplate> templates = separatePolicyFile ? GenerateAPIPolicyFiles(apis, parsedTemplate).ToList()
@@ -399,7 +399,7 @@ namespace APIManagementTemplate
             {
                 GenerateSwaggerTemplate(parsedTemplate, separatePolicyFile, apis, templates);
             }
-            templates.AddRange(apis.Select(api => GenerateAPI(api, parsedTemplate, apiStandalone, separatePolicyFile, separateSwaggerFile)));
+            templates.AddRange(apis.Select(api => GenerateAPI(api, parsedTemplate, apiStandalone, separatePolicyFile, separateSwaggerFile, mergeTemplateForLogicAppBackendAndProperties)));
             var versionSets = apis.Where(api => api["properties"]["apiVersionSetId"] != null)
                 .Distinct(new ApiVersionSetIdComparer())
                 .Select(api => GenerateVersionSet(api, parsedTemplate, apiStandalone)).ToList();
@@ -749,7 +749,7 @@ namespace APIManagementTemplate
         }
 
         private GeneratedTemplate GenerateAPI(JToken api, JObject parsedTemplate, bool apiStandalone,
-            bool separatePolicyFile, bool separateSwaggerFile)
+            bool separatePolicyFile, bool separateSwaggerFile, bool mergeTemplateForLogicAppBackendAndProperties)
         {
             var apiObject = JObject.FromObject(api);
             GeneratedTemplate generatedTemplate = new GeneratedTemplate();
@@ -770,10 +770,45 @@ namespace APIManagementTemplate
             SetFilenameAndDirectory(apiObject, parsedTemplate, generatedTemplate, false);
             template.resources.Add(apiStandalone ? RemoveServiceDependencies(apiObject) : apiObject);
 
+            if (mergeTemplateForLogicAppBackendAndProperties && apiObject["properties"]["description"].ToString().Contains("Logic App"))
+            {
+                template = MergeTemplateForLogicAppBackendAndProperties(template, parsedTemplate);
+            }
+            
             if (apiStandalone)
                 AddProductAPI(apiObject, parsedTemplate, template.resources);
             generatedTemplate.Content = JObject.FromObject(template);
             return generatedTemplate;
+        }
+                
+
+        private DeploymentTemplate MergeTemplateForLogicAppBackendAndProperties(DeploymentTemplate originalTemplate, JObject parsedTemplate)
+        {
+            var mergedTemplate = originalTemplate;
+
+            List<string> wantedResources = new List<string> { PropertyResourceType, BackendResourceType };
+
+            var resources = parsedTemplate.SelectTokens("$.resources[*]")
+                .Where(r => wantedResources.Any(w => w == r.Value<string>("type")));
+            foreach (JToken resource in resources)
+            {
+                if (resource.Value<string>("type") == ServiceResourceType)
+                {
+                    AddServiceResources(parsedTemplate, resource, PropertyResourceType);
+                    AddServiceResources(parsedTemplate, resource, BackendResourceType);
+                }
+                mergedTemplate.parameters.Merge(GetParameters(parsedTemplate["parameters"], resource));
+                mergedTemplate.variables.Merge(GetParameters(parsedTemplate["variables"], resource, "variables"));
+                var variableParameters = GetParameters(parsedTemplate["parameters"], parsedTemplate["variables"]);
+                foreach (var parameter in variableParameters)
+                {
+                    if (mergedTemplate.parameters[parameter.Key] == null)
+                        mergedTemplate.parameters[parameter.Key] = parameter.Value;
+                }
+                mergedTemplate.resources.Add(JObject.FromObject(resource));
+            }
+
+            return mergedTemplate;
         }
 
         private void AddProductAPI(JToken api, JObject parsedTemplate, IList<JObject> templateResources)

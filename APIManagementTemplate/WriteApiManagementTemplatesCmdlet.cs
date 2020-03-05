@@ -44,6 +44,9 @@ namespace APIManagementTemplate
         [Parameter(Mandatory = false, HelpMessage = "Always add properties and backend, usefull when having logicapp backends and this service is not generated.")]
         public bool AlwaysAddPropertiesAndBackend = false;
 
+        [Parameter(Mandatory = false, HelpMessage = "Merge backend and properties if logic app backend exists into the [api-name]/[api-name].template.json")]
+        public bool MergeTemplateForLogicAppBackendAndProperties = false;
+
         [Parameter(Mandatory = false, HelpMessage = "If set, the input template is written to this file ")]
         public string DebugTemplateFile = "";
 
@@ -51,7 +54,7 @@ namespace APIManagementTemplate
         {
             if (!string.IsNullOrEmpty(DebugTemplateFile))
                 File.WriteAllText(DebugTemplateFile, ARMTemplate);
-            var templates= new TemplatesGenerator().Generate(ARMTemplate, ApiStandalone, SeparatePolicyFile, GenerateParameterFiles, ReplaceListSecretsWithParameter, ListApiInProduct, SeparateSwaggerFile, AlwaysAddPropertiesAndBackend);
+            var templates= new TemplatesGenerator().Generate(ARMTemplate, ApiStandalone, SeparatePolicyFile, GenerateParameterFiles, ReplaceListSecretsWithParameter, ListApiInProduct, SeparateSwaggerFile, AlwaysAddPropertiesAndBackend, MergeTemplateForLogicAppBackendAndProperties);
             foreach (GeneratedTemplate template in templates)
             {
                 string filename = $@"{OutputDirectory}\{template.FileName}";
