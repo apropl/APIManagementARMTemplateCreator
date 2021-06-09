@@ -24,12 +24,12 @@ namespace APIManagementTemplate.Test
 
         private JObject GetTemplate(bool exportProducts = false, bool parametrizePropertiesOnly = true,
             bool replaceSetBackendServiceBaseUrlAsProperty = false, bool fixedServiceNameParameter = false,
-            bool createApplicationInsightsInstance = false, bool exportSwaggerDefinition = false)
+            bool createApplicationInsightsInstance = false, bool exportSwaggerDefinition = false, bool exportGroups = false)
         {
             if (this._template != null)
                 return this._template;
             var generator = new TemplateGenerator("ibizmalo", "c107df29-a4af-4bc9-a733-f88f0eaa4296", "PreDemoTest",
-                "maloapimtestclean", false, exportProducts, true, parametrizePropertiesOnly, this.collector,
+                "maloapimtestclean", exportGroups, exportProducts, true, parametrizePropertiesOnly, this.collector,
                 replaceSetBackendServiceBaseUrlAsProperty, fixedServiceNameParameter,
                 createApplicationInsightsInstance, exportSwaggerDefinition: exportSwaggerDefinition);
             this._template = generator.GenerateTemplate().GetAwaiter().GetResult();
@@ -80,7 +80,7 @@ namespace APIManagementTemplate.Test
         [TestMethod]
         public void TestProductContains4Groups()
         {
-            var template = GetTemplate(true, true, false, true, false);
+            var template = GetTemplate(true, true, false, true, false, false, true);
             var productGroups = template.WithResources(ResourceType.ProductGroup);
             Assert.IsNotNull(productGroups);
 
@@ -98,7 +98,7 @@ namespace APIManagementTemplate.Test
         [TestMethod]
         public void TestContains1Group()
         {
-            var template = GetTemplate(true, true, false, true, false);
+            var template = GetTemplate(true, true, false, true, false, false, true);
             var policyGroup = template.WithResource(ResourceType.Group);
             Assert.IsNotNull(policyGroup);
 
@@ -275,7 +275,7 @@ namespace APIManagementTemplate.Test
         [TestMethod]
         public void TestApiContainsPolicyReplacedSetBaseUrl()
         {
-            var template = GetTemplate();
+            var template = GetTemplate(parametrizePropertiesOnly: false);
             var apiPolicies = template.WithResources(ResourceType.ApiPolicy);
             var policy = apiPolicies.FirstOrDefault();
             Assert.IsNotNull(policy);
@@ -286,7 +286,7 @@ namespace APIManagementTemplate.Test
         [TestMethod]
         public void TestApiContainsPolicyReplacedSetBaseUrlAsPropertyWhenReplaceSetBaseUrlAsPropertyIsTrue()
         {
-            var template = GetTemplate(replaceSetBackendServiceBaseUrlAsProperty: true);
+            var template = GetTemplate(parametrizePropertiesOnly: false, replaceSetBackendServiceBaseUrlAsProperty: true);
             var apiPolicies = template.WithResources(ResourceType.ApiPolicy);
             var policy = apiPolicies.FirstOrDefault();
             Assert.IsNotNull(policy);
@@ -300,8 +300,8 @@ namespace APIManagementTemplate.Test
         [TestMethod]
         public void TestApiContainsPropertyWhenReplaceSetBaseUrlAsPropertyIsTrue()
         {
-            var template = GetTemplate(replaceSetBackendServiceBaseUrlAsProperty: true);
-            var property = template.WithDirectResources(ResourceType.Property)
+            var template = GetTemplate(parametrizePropertiesOnly: false, replaceSetBackendServiceBaseUrlAsProperty: true);
+            var property = template.WithDirectResources(ResourceType.NamedValues)
                 .SingleOrDefault(x => x.Value(Arm.Name).Contains("api_tfs_backendurl"));
             Assert.IsNotNull(property);
         }
@@ -310,7 +310,7 @@ namespace APIManagementTemplate.Test
         public void TestServiceContainsPropertyForEnvironment()
         {
             var template = GetTemplate();
-            var property = template.WithDirectResources(ResourceType.Property)
+            var property = template.WithDirectResources(ResourceType.NamedValues)
                 .SingleOrDefault(x => x.Value(Arm.Name).Contains("environment"));
             Assert.IsNotNull(property);
         }
@@ -353,7 +353,7 @@ namespace APIManagementTemplate.Test
         public void TestServiceContainsPropertyForLogger()
         {
             var template = GetTemplate();
-            var property = template.WithDirectResources(ResourceType.Property)
+            var property = template.WithDirectResources(ResourceType.NamedValues)
                 .SingleOrDefault(x => x.Value(Arm.Name).Contains("5b5dbaa35a635f22ac9db431"));
 
             Assert.IsNotNull(property);
@@ -366,7 +366,7 @@ namespace APIManagementTemplate.Test
         public void TestServiceDoesNotContainPropertyForLoggerWhenCreateApplicationInsightsInstanceIsTrue()
         {
             var template = GetTemplate(createApplicationInsightsInstance: true);
-            var property = template.WithResources(ResourceType.Property)
+            var property = template.WithResources(ResourceType.NamedValues)
                 .SingleOrDefault(x => x.Value(Arm.Name).Contains("5b5dbaa35a635f22ac9db431"));
 
             Assert.IsNull(property);
@@ -376,7 +376,7 @@ namespace APIManagementTemplate.Test
         public void TestServiceContainsPropertyForBackend()
         {
             var template = GetTemplate();
-            var property = template.WithResources(ResourceType.Property)
+            var property = template.WithResources(ResourceType.NamedValues)
                 .SingleOrDefault(x => x.Value(Arm.Name).Contains("myfunctions-key"));
 
             Assert.IsNotNull(property);
@@ -432,7 +432,7 @@ namespace APIManagementTemplate.Test
 
             Assert.AreEqual(2, dependsOn.Count());
             Assert.IsTrue(dependsOn.Contains(
-                "[resourceId('Microsoft.ApiManagement/service/properties', parameters('service_ibizmalo_name'),'myfunctions-key')]"));
+                "[resourceId('Microsoft.ApiManagement/service/namedValues', parameters('service_ibizmalo_name'),'myfunctions-key')]"));
         }
 
         [TestMethod]
@@ -547,7 +547,7 @@ namespace APIManagementTemplate.Test
                 diagnostics.Index(Arm.Properties).Value(Arm.AlwaysLog));
             Assert.AreEqual($"[concat(parameters('service_ibizmalo_name'), '/', {name})]",
                 diagnostics.Value(Arm.Name));
-            Assert.AreEqual($"2018-06-01-preview", diagnostics.Value(Arm.ApiVersion));
+            Assert.AreEqual($"2019-01-01", diagnostics.Value(Arm.ApiVersion));
             var loggerResource =
                 $"[resourceId('Microsoft.ApiManagement/service/loggers', parameters('service_ibizmalo_name'), parameters('service_ibizmalo_applicationInsights'))]";
             Assert.AreEqual(loggerResource, diagnostics.Index(Arm.Properties).Value(Arm.LoggerId));
@@ -579,7 +579,7 @@ namespace APIManagementTemplate.Test
             var template = GetTemplate(true, false);
             AssertParameter(template, "diagnostic_appInsights_samplingPercentage", "100", "string");
             AssertParameter(template, "diagnostic_appInsights_alwaysLog", "allErrors", "string");
-            AssertParameter(template, "diagnostic_appInsights_enableHttpCorrelationHeaders", "True", "string");
+            AssertParameter(template, "diagnostic_appInsights_enableHttpCorrelationHeaders", "True", "bool");
         }
 
         [TestMethod]

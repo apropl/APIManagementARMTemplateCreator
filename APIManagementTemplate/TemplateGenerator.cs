@@ -2,6 +2,7 @@ using APIManagementTemplate.Models;
 using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -31,8 +32,10 @@ namespace APIManagementTemplate
         private readonly bool parameterizeBackendFunctionKey;
         private readonly bool exportSwaggerDefinition;
         IResourceCollector resourceCollector;
+        private string separatePolicyOutputFolder;
+        private bool chainDependencies;
 
-        public TemplateGenerator(string servicename, string subscriptionId, string resourceGroup, string apiFilters, bool exportGroups, bool exportProducts, bool exportPIManagementInstance, bool parametrizePropertiesOnly, IResourceCollector resourceCollector, bool replaceSetBackendServiceBaseUrlAsProperty = false, bool fixedServiceNameParameter = false, bool createApplicationInsightsInstance = false, string apiVersion = null, bool parameterizeBackendFunctionKey = false, bool exportSwaggerDefinition = false, bool exportCertificates = true, bool exportTags = false)
+        public TemplateGenerator(string servicename, string subscriptionId, string resourceGroup, string apiFilters, bool exportGroups, bool exportProducts, bool exportPIManagementInstance, bool parametrizePropertiesOnly, IResourceCollector resourceCollector, bool replaceSetBackendServiceBaseUrlAsProperty = false, bool fixedServiceNameParameter = false, bool createApplicationInsightsInstance = false, string apiVersion = null, bool parameterizeBackendFunctionKey = false, bool exportSwaggerDefinition = false, bool exportCertificates = true, bool exportTags = false, string separatePolicyOutputFolder = "", bool chainDependencies = false)
         {
             this.servicename = servicename;
             this.subscriptionId = subscriptionId;
@@ -51,6 +54,8 @@ namespace APIManagementTemplate
             this.apiVersion = apiVersion;
             this.parameterizeBackendFunctionKey = parameterizeBackendFunctionKey;
             this.exportSwaggerDefinition = exportSwaggerDefinition;
+            this.separatePolicyOutputFolder = separatePolicyOutputFolder;
+            this.chainDependencies = chainDependencies;
         }
 
         private string GetAPIMResourceIDString()
@@ -60,7 +65,7 @@ namespace APIManagementTemplate
 
         public async Task<JObject> GenerateTemplate()
         {
-            DeploymentTemplate template = new DeploymentTemplate(this.parametrizePropertiesOnly, this.fixedServiceNameParameter, this.createApplicationInsightsInstance, this.parameterizeBackendFunctionKey);
+            DeploymentTemplate template = new DeploymentTemplate(this.parametrizePropertiesOnly, this.fixedServiceNameParameter, this.createApplicationInsightsInstance, this.parameterizeBackendFunctionKey, this.separatePolicyOutputFolder, this.chainDependencies);
             if (exportPIManagementInstance)
             {
                 var apim = await resourceCollector.GetResource(GetAPIMResourceIDString());
@@ -105,11 +110,12 @@ namespace APIManagementTemplate
             }
 
 
-            var apis = await resourceCollector.GetResource(GetAPIMResourceIDString() + "/apis", (string.IsNullOrEmpty(apiFilters) ? "" : $"$filter={apiFilters}"));
-
-            if (apis != null)
+            var apiObjectResult = await resourceCollector.GetResource(GetAPIMResourceIDString() + "/apis", (string.IsNullOrEmpty(apiFilters) ? "" : $"$filter={apiFilters}"));
+            IEnumerable<JToken> apis = new List<JToken>();
+            if (apiObjectResult != null)
             {
-                foreach (JObject apiObject in (!string.IsNullOrEmpty(apiVersion) ? apis.Value<JArray>("value").Where(aa => aa["properties"].Value<string>("apiVersion") == this.apiVersion) : apis.Value<JArray>("value")))
+                apis = (!string.IsNullOrEmpty(apiVersion) ? apiObjectResult.Value<JArray>("value").Where(aa => aa["properties"].Value<string>("apiVersion") == this.apiVersion) : apiObjectResult.Value<JArray>("value"));
+                foreach (JObject apiObject in apis)
                 {
 
                     var id = apiObject.Value<string>("id");
@@ -149,6 +155,7 @@ namespace APIManagementTemplate
                     }
 
                     var operations = await resourceCollector.GetResource(id + "/operations");
+                    string previousOperationName = null;
                     foreach (JObject operation in (operations == null
                         ? new JArray()
                         : operations.Value<JArray>("value")))
@@ -189,7 +196,7 @@ namespace APIManagementTemplate
                             if (!string.IsNullOrEmpty(backendid))
                             {
                                 BackendObject bo = await HandleBackend(template, operationSuffix, backendid);
-                                JObject backendInstance = bo.backendInstance;
+                                JObject backendInstance = bo?.backendInstance;
                                 if (backendInstance != null)
                                 {
                                     if (apiTemplateResource.Value<JArray>("dependsOn") == null)
@@ -199,7 +206,7 @@ namespace APIManagementTemplate
                                     apiTemplateResource.Value<JArray>("dependsOn").Add(
                                         $"[resourceId('Microsoft.ApiManagement/service/backends', parameters('{GetServiceName(servicename)}'), '{backendInstance.Value<string>("name")}')]");
                                 }
-                                if (bo.backendProperty != null)
+                                if (bo?.backendProperty != null)
                                 {
                                     if (bo.backendProperty.type == Property.PropertyType.LogicApp)
                                     {
@@ -220,6 +227,11 @@ namespace APIManagementTemplate
                             }
                             if (exportCertificates) await AddCertificate(policy, template);
 
+                            if (Directory.Exists(separatePolicyOutputFolder))
+                            {
+                                pol = ReplacePolicyWithFileLink(template, pol, operationSuffix);
+                            }
+
                             if (exportSwaggerDefinition)
                                 apiTemplateResource.Value<JArray>("resources").Add(pol);
                             else
@@ -230,12 +242,22 @@ namespace APIManagementTemplate
 
                             //handle nextlink?
                         }
-                        //handle nextlink?                
+                        //handle nextlink?               
+                        
+                        //add dependency to make sure not all operations are deployed at the same time. This results in timeouts when having a lot of operations
+                        if (previousOperationName != null)
+                        {
+                            //operationTemplateResource.Value<JArray>("dependsOn").Where(aa => aa.ToString().Contains("'Microsoft.ApiManagement/service/apis'")).First();
+                            string apiname = parametrizePropertiesOnly ? $"'{apiInstance.Value<string>("name")}'" : $"parameters('api_{apiInstance.Value<string>("name")}_name')";
+                            var dep = $"[resourceId('Microsoft.ApiManagement/service/apis/operations', parameters('{GetServiceName(servicename)}'), {apiname}, '{previousOperationName}')]";
+                            operationTemplateResource.Value<JArray>("dependsOn").Add(dep);
+                        }
+                        previousOperationName = operationInstance.Value<string>("name");
                     }
                     if (exportSwaggerDefinition)
                     {
                         apiTemplateResource["properties"]["contentFormat"] = "swagger-json";
-                        var swaggerExport = await resourceCollector.GetResource(id + "?format=swagger-link&export=true", apiversion: "2018-06-01-preview");
+                        var swaggerExport = await resourceCollector.GetResource(id + "?format=swagger-link&export=true", apiversion: "2019-01-01");
                         var swaggerUrl = swaggerExport.Value<string>("link");
                         var swaggerContent = await resourceCollector.GetResourceByURL(swaggerUrl);
                         var serviceUrl = apiInstance["properties"].Value<string>("serviceUrl");
@@ -277,6 +299,11 @@ namespace APIManagementTemplate
                             }
                         }
 
+                        if (Directory.Exists(separatePolicyOutputFolder))
+                        {
+                            ReplacePolicyWithFileLink(template, policyTemplateResource, apiInstance.Value<string>("name") + "_AllOperations");
+                        }
+
                         //handle nextlink?
                     }
 
@@ -293,7 +320,7 @@ namespace APIManagementTemplate
                     //diagnostics
                     var loggers = resourceCollector.GetResource(GetAPIMResourceIDString() + "/loggers").Result;
                     var logger = loggers == null ? new JArray() : loggers.Value<JArray>("value");
-                    var diagnostics = await resourceCollector.GetResource(id + "/diagnostics", apiversion: "2018-06-01-preview");
+                    var diagnostics = await resourceCollector.GetResource(id + "/diagnostics", apiversion: "2019-01-01");
                     foreach (JObject diagnostic in diagnostics.Value<JArray>("value"))
                     {
                         if (diagnostic.Value<string>("type") == "Microsoft.ApiManagement/service/apis/diagnostics")
@@ -357,8 +384,16 @@ namespace APIManagementTemplate
 
                         var productTemplateResource = template.AddProduct(productObject);
 
+                        var listOfApiNamesInThisSearch = apis.Select(api => api.Value<string>("name")).ToList();
+
                         foreach (JObject productApi in (productApis == null ? new JArray() : productApis.Value<JArray>("value")))
                         {
+                            //only take the api's inside the api query
+                            if (!listOfApiNamesInThisSearch.Contains(productApi.Value<string>("name")))
+                            {
+                                continue;
+                            }
+
                             var productProperties = productApi["properties"];
                             if (productProperties["apiVersionSetId"] != null)
                             {
@@ -368,21 +403,24 @@ namespace APIManagementTemplate
                             productTemplateResource.Value<JArray>("resources").Add(template.AddProductSubObject(productApi));
 
                             //also add depends On for API
-                            productTemplateResource.Value<JArray>("dependsOn").Add($"[resourceId('Microsoft.ApiManagement/service/apis', parameters('{GetServiceName(servicename)}'), parameters('api_{productApi.Value<string>("name")}_name'))]");
+                            string apiname = parametrizePropertiesOnly ? $"'{productApi.Value<string>("name")}'" : $"parameters('api_{productApi.Value<string>("name")}_name')";
+                            productTemplateResource.Value<JArray>("dependsOn").Add($"[resourceId('Microsoft.ApiManagement/service/apis', parameters('{GetServiceName(servicename)}'), {apiname})]");
                         }
 
-                        var groups = await resourceCollector.GetResource(id + "/groups");
-                        foreach (JObject group in (groups == null ? new JArray() : groups.Value<JArray>("value")))
+                        if (exportGroups)
                         {
-                            if (group["properties"].Value<bool>("builtIn") == false)
+                            var groups = await resourceCollector.GetResource(id + "/groups");
+                            foreach (JObject group in (groups == null ? new JArray() : groups.Value<JArray>("value")))
                             {
-                                // Add group resource
-                                var groupObject = await resourceCollector.GetResource(GetAPIMResourceIDString() + "/groups/" + group.Value<string>("name"));
-                                template.AddGroup(groupObject);
-                                productTemplateResource.Value<JArray>("dependsOn").Add($"[resourceId('Microsoft.ApiManagement/service/groups', parameters('{GetServiceName(servicename)}'), parameters('{template.AddParameter($"group_{group.Value<string>("name")}_name", "string", group.Value<string>("name"))}'))]");
+                                if (group["properties"].Value<bool>("builtIn") == false)
+                                {
+                                    // Add group resource
+                                    var groupObject = await resourceCollector.GetResource(GetAPIMResourceIDString() + "/groups/" + group.Value<string>("name"));
+                                    template.AddGroup(groupObject);
+                                    productTemplateResource.Value<JArray>("dependsOn").Add($"[resourceId('Microsoft.ApiManagement/service/groups', parameters('{GetServiceName(servicename)}'), parameters('{template.AddParameter($"group_{group.Value<string>("name")}_name", "string", group.Value<string>("name"))}'))]");
+                                }
+                                productTemplateResource.Value<JArray>("resources").Add(template.AddProductSubObject(group));
                             }
-                            productTemplateResource.Value<JArray>("resources").Add(template.AddProductSubObject(group));
-
                         }
                         var policies = await resourceCollector.GetResource(id + "/policies");
                         foreach (JObject policy in (policies == null ? new JArray() : policies.Value<JArray>("value")))
@@ -393,17 +431,20 @@ namespace APIManagementTemplate
                 }
             }
 
-            var properties = await resourceCollector.GetResource(GetAPIMResourceIDString() + "/properties");
+            var properties = await resourceCollector.GetResource(GetAPIMResourceIDString() + "/namedValues", apiversion: "2020-06-01-preview");
+
+          //  var properties = await resourceCollector.GetResource(GetAPIMResourceIDString() + "/properties",apiversion: "2020-06-01-preview");
+            //has more?
             foreach (JObject propertyObject in (properties == null ? new JArray() : properties.Value<JArray>("value")))
             {
 
                 var id = propertyObject.Value<string>("id");
-                var name = propertyObject["properties"].Value<string>("displayName");
+                var displayName = propertyObject["properties"].Value<string>("displayName");
 
-                var identifiedProperty = this.identifiedProperties.Where(idp => name.EndsWith(idp.name)).FirstOrDefault();
+                var identifiedProperty = this.identifiedProperties.Where(idp => displayName.EndsWith(idp.name)).FirstOrDefault();
                 if (identifiedProperty == null)
                 {
-                    identifiedProperty = identifiedProperties.FirstOrDefault(idp => name == $"{idp.name}-key" && idp.type == Property.PropertyType.Function);
+                    identifiedProperty = identifiedProperties.FirstOrDefault(idp => displayName == $"{idp.name}-key" && idp.type == Property.PropertyType.Function);
                 }
                 if (identifiedProperty != null)
                 {
@@ -418,20 +459,15 @@ namespace APIManagementTemplate
                     }
                     else if (identifiedProperty.type == Property.PropertyType.Function)
                     {
-                        var functionSplittedName = identifiedProperty.operationName.Split('-');
-                        var functionName = functionSplittedName.Last();
-                        if (functionSplittedName.Count() > 2)
-                        {
-                            functionName = string.Join("-", functionSplittedName.Skip(1));
-                        }
-                        //    "replacewithfunctionoperationname"
-                        propertyObject["properties"]["value"] = $"[{identifiedProperty.extraInfo.Replace("replacewithfunctionoperationname", $"{functionName}")}]";
+                        propertyObject["properties"]["value"] = $"[{identifiedProperty.extraInfo}]";
                     }
-                    var propertyTemplate = template.AddProperty(propertyObject);
+
+
+                    var propertyTemplate = template.AddNamedValues(propertyObject);
 
                     if (!parametrizePropertiesOnly)
                     {
-                        string resourceid = $"[resourceId('Microsoft.ApiManagement/service/properties',{propertyTemplate.GetResourceId()})]";
+                        string resourceid = $"[resourceId('Microsoft.ApiManagement/service/namedValues',{propertyTemplate.GetResourceId()})]";
                         foreach (var apiName in identifiedProperty.apis)
                         {
                             var apiTemplate = template.resources.Where(rr => rr.Value<string>("name") == apiName).FirstOrDefault();
@@ -482,6 +518,17 @@ namespace APIManagementTemplate
                 var certificates = await resourceCollector.GetResource(GetAPIMResourceIDString() + "/certificates");
                 if (certificates != null)
                 {
+                    // If the thumbprint is a property, we must lookup the value of the property first.
+                    var match = Regex.Match(certificateThumbprint, "{{(?<name>[-_.a-zA-Z0-9]*)}}");
+
+                    if (match.Success)
+                    {
+                        string propertyName = match.Groups["name"].Value;
+                        var propertyResource = await resourceCollector.GetResource(GetAPIMResourceIDString() + $"/properties/{propertyName}");
+                        if (propertyResource != null)
+                            certificateThumbprint = propertyResource["properties"].Value<string>("value");
+                    }
+
                     var certificate = certificates.Value<JArray>("value").FirstOrDefault(x =>
                         x?["properties"]?.Value<string>("thumbprint") == certificateThumbprint);
                     if (certificate != null)
@@ -671,8 +718,8 @@ namespace APIManagementTemplate
             var backendService = policyXMLDoc.Descendants().Where(dd => dd.Name == "set-backend-service").LastOrDefault();
             if (backendService != null)
             {
-
-                if (backendService.Attribute("base-url") != null && !backendService.Attribute("base-url").Value.Contains("{{"))
+                // This does not work in all cases. If you want to be sure, use a property as placeholder.
+                if (backendService.Attribute("base-url") != null && !backendService.Attribute("base-url").Value.Contains("{{") && !parametrizePropertiesOnly)
                 {
                     string baseUrl = backendService.Attribute("base-url").Value;
                     var paramname = template.AddParameter($"api_{apiname}_backendurl", "string", baseUrl);
@@ -688,7 +735,7 @@ namespace APIManagementTemplate
                         var property = new
                         {
                             id = $"{serviceId}/properties/{paramname}",
-                            type = "Microsoft.ApiManagement/service/properties",
+                            type = "Microsoft.ApiManagement/service/namedValues",
                             name = paramname,
                             properties = new
                             {
@@ -697,7 +744,7 @@ namespace APIManagementTemplate
                                 secret = false
                             }
                         };
-                        template.AddProperty(JObject.FromObject(property));
+                        template.AddNamedValues(JObject.FromObject(property));
                     }
                     else
                     {
@@ -739,8 +786,23 @@ namespace APIManagementTemplate
             return policyContent;
         }
 
+        private JObject ReplacePolicyWithFileLink(DeploymentTemplate template, JObject policy, string policyName)
+        {
+            var policyPropertyName = policy["properties"].Value<string>("policyContent") == null ? "value" : "policyContent";
+            File.WriteAllText(Path.Combine(separatePolicyOutputFolder, $"{policyName}.xml"), policy["properties"].Value<string>(policyPropertyName));
+            policy["properties"][policyPropertyName] = $"[concat(parameters('{TemplatesGenerator.TemplatesStorageAccount}'), parameters('{TemplatesGenerator.TemplatesStorageBlobPrefix}'), '/{separatePolicyOutputFolder}/{policyName}.xml', parameters('{TemplatesGenerator.TemplatesStorageAccountSASToken}'))]";
+            policyPropertyName = policy["properties"].Value<string>("format") == null ? "contentFormat" : "format";
+            policy["properties"][policyPropertyName] = "xml-link";
+
+            // Add repository parameters to the template.
+            if (template.parameters[TemplatesGenerator.TemplatesStorageAccount] == null)
+            {
+                template.parameters[TemplatesGenerator.TemplatesStorageAccount] = JToken.FromObject(new { type = "string", metadata = new { description = "Base URL of the repository" } });
+                template.parameters[TemplatesGenerator.TemplatesStorageBlobPrefix] = JToken.FromObject(new { type = "string", defaultValue = String.Empty, metadata = new { description = "Subfolder within container" } });
+                template.parameters[TemplatesGenerator.TemplatesStorageAccountSASToken] = JToken.FromObject(new { type = "securestring", defaultValue = String.Empty });
+            }
+
+            return policy;
+        }
     }
-
-
-
 }

@@ -81,13 +81,17 @@ namespace APIManagementTemplate
         private const string ApiOperationPolicyResourceType = "Microsoft.ApiManagement/service/apis/operations/policies";
         private const string ApiPolicyResourceType = "Microsoft.ApiManagement/service/apis/policies";
         private const string ServicePolicyFileName = "service.policy.xml";
-        private const string PropertyResourceType = "Microsoft.ApiManagement/service/properties";
+        private const string PropertyResourceType = "Microsoft.ApiManagement/service/namedValues";
         private const string BackendResourceType = "Microsoft.ApiManagement/service/backends";
         private const string OpenIdConnectProviderResourceType = "Microsoft.ApiManagement/service/openidConnectProviders";
         private const string CertificateResourceType = "Microsoft.ApiManagement/service/certificates";
+        public const string TemplatesStorageAccount = "_artifactsLocation"; // Default for generated PowerShell script. In this file, repoBaseUrl is used and I don't want to break compatibility.
+        public const string TemplatesStorageBlobPrefix = "_artifactsBlobPrefix";
         public const string TemplatesStorageAccountSASToken = "_artifactsLocationSasToken";
         private const string MasterTemplateJson = "master.template.json";
         private const string ProductAPIResourceType = "Microsoft.ApiManagement/service/products/apis";
+
+        private bool _listApiInProduct;
 
         public IList<GeneratedTemplate> Generate(string sourceTemplate, bool apiStandalone, bool separatePolicyFile = false, bool generateParameterFiles = false, bool replaceListSecretsWithParameter = false, bool listApiInProduct = false, bool separateSwaggerFile = false, bool alwaysAddPropertiesAndBackend = false, bool mergeTemplateForLogicAppBackendAndProperties = false)
         {
@@ -103,6 +107,8 @@ namespace APIManagementTemplate
             templates.Add(GenerateTemplate(parsedTemplate, "groupsUsers.template.json", String.Empty,
                 UserGroupResourceType));
             MoveExternalDependencies(templates);
+
+            _listApiInProduct = listApiInProduct;
             templates.Add(GenerateMasterTemplate(templates.Where(x => x.Type == ContentType.Json).ToList(), parsedTemplate, separatePolicyFile, apiStandalone));
             templates.AddRange(GenerateAPIMasterTemplate(templates, parsedTemplate, separatePolicyFile, apiStandalone));
             MoveExternalDependencies(templates.Where(x => x.FileName.StartsWith("api-") && x.FileName.EndsWith(MasterTemplateJson)).ToList());
@@ -119,7 +125,7 @@ namespace APIManagementTemplate
 
         private void ReplaceListSecretsWithParameter(JObject parsedTemplate)
         {
-            var properties = parsedTemplate.SelectTokens("$.resources[?(@.type=='Microsoft.ApiManagement/service/properties')]").Where(x =>
+            var properties = parsedTemplate.SelectTokens("$.resources[?(@.type=='Microsoft.ApiManagement/service/namedValues')]").Where(x =>
                     x["properties"]?.Value<string>("value").StartsWith("[listsecrets(") ?? false);
             foreach (JToken property in properties)
             {
@@ -220,8 +226,13 @@ namespace APIManagementTemplate
         {
             var generatedTemplate = new GeneratedTemplate { Directory = directory, FileName = fileName };
             DeploymentTemplate template = new DeploymentTemplate(true, true);
+
+            //move servicetemplate to the top of the list
+            filteredTemplates = filteredTemplates.AsEnumerable().OrderBy(t => t.FileName != "service.template.json");
+
+
             foreach (GeneratedTemplate template2 in filteredTemplates)
-            {
+            {                
                 template.resources.Add(GenerateDeployment(template2, generatedTemplates));
             }
             template.parameters = GetParameters(parsedTemplate["parameters"], template.resources, separatePolicyFile);
@@ -288,7 +299,13 @@ namespace APIManagementTemplate
             var dependsOn = new JArray();
             foreach (string name in template.ExternalDependencies)
             {
-                var matches = generatedTemplates.Where(t => IsLocalDependency(name, t));
+                //check for ListApiInProduct, then skip the dependency to the api resources.
+                if (_listApiInProduct && name.Contains("Microsoft.ApiManagement/service/apis"))
+                {
+                    continue;
+                }
+
+                var matches = generatedTemplates.Where(t => IsLocalDependency(name, t)); 
                 if (matches.Any())
                 {
                     var match = matches.First();
@@ -705,7 +722,7 @@ namespace APIManagementTemplate
         private static void ReplaceSwaggerWithFileLink(JToken policy, FileInfo fileInfo)
         {
             policy["properties"]["contentFormat"] = "swagger-link-json";
-            policy["apiVersion"] = "2018-06-01-preview";
+            policy["apiVersion"] = "2019-01-01";
             string formattedDirectory = fileInfo.Directory.Replace(@"\", "/");
             var directory = $"/{formattedDirectory}";
             policy["properties"]["contentValue"] =
