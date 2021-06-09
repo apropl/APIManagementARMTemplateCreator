@@ -202,7 +202,7 @@ namespace APIManagementTemplate.Test
             //even though it is only handled when deploying an api with apiversion 20180601preview or later
             var template = _generatedTemplates.With(Filename.Echo);
             var api = template.WithDirectResource(ResourceType.Api);
-            Assert.AreEqual("2018-06-01-preview", api.Value(Arm.ApiVersion));
+            Assert.AreEqual("2019-01-01", api.Value(Arm.ApiVersion));
         }
 
         [TestMethod]
@@ -367,7 +367,7 @@ namespace APIManagementTemplate.Test
         {
             GeneratedTemplate serviceTemplate = _generatedTemplates.Single(x => x.FileName == ServiceFilename && x.Directory == String.Empty);
 
-            var property = serviceTemplate.Content.SelectTokens("$..resources[?(@.type=='Microsoft.ApiManagement/service/properties')]")
+            var property = serviceTemplate.Content.SelectTokens("$..resources[?(@.type=='Microsoft.ApiManagement/service/namedValues')]")
                 .SingleOrDefault(x => x["name"].Value<string>().Contains("myfunctions-key"));
             Assert.IsNotNull(property);
 

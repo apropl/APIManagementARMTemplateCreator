@@ -38,8 +38,8 @@
     <Reference Include="FluentAssertions, Version=5.6.0.0, Culture=neutral, PublicKeyToken=33f2691a05b67b6a, processorArchitecture=MSIL">
       <HintPath>..\packages\FluentAssertions.5.6.0\lib\net45\FluentAssertions.dll</HintPath>
     </Reference>
-    <Reference Include="Newtonsoft.Json, Version=10.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
-      <HintPath>..\packages\Newtonsoft.Json.10.0.3\lib\net45\Newtonsoft.Json.dll</HintPath>
+    <Reference Include="Newtonsoft.Json, Version=12.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed">
+      <HintPath>..\packages\Newtonsoft.Json.12.0.3\lib\net45\Newtonsoft.Json.dll</HintPath>
       <Private>True</Private>
     </Reference>
     <Reference Include="System" />
@@ -292,6 +292,14 @@
     <EmbeddedResource Include="Samples\LogicAppAddedAsOperation\service-iBizUtbildningAPIM-products.json" />
     <EmbeddedResource Include="Samples\LogicAppAddedAsOperation\service-iBizUtbildningAPIM-properties.json" />
     <EmbeddedResource Include="Samples\LogicAppAddedAsOperation\workflows-salesinvoice-la.json" />
+    <EmbeddedResource Include="Samples\FunctionAppMixedWithLogicApp\service-ibizmalo-namedValues.json" />
+    <EmbeddedResource Include="Samples\FunctionAppUnedited\service-ibizmalo-namedValues.json" />
+    <EmbeddedResource Include="Samples\LogicAppAddedAsOperation\service-iBizUtbildningAPIM-namedValues.json" />
+    <EmbeddedResource Include="Samples\LogicAppCustomTriggerName\service-ibizmalo-namedValues.json" />
+    <EmbeddedResource Include="Samples\LogicAppManual\service-ibizmalo-namedValues.json" />
+    <EmbeddedResource Include="Samples\LogicAppRequest\service-ibizmalo-namedValues.json" />
+    <EmbeddedResource Include="Samples\WithoutApiVersionSetId\service-ibizmalo-namedValues.json" />
+    <EmbeddedResource Include="Samples\UrlHandling\service-apidev-namedValues.json" />
     <None Include="Samples\workflows-salesinvoice-la.json" />
   </ItemGroup>
   <ItemGroup>
