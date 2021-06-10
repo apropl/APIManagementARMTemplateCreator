@@ -624,8 +624,8 @@ namespace APIManagementTemplate.Test
             var api = GetResourceFromTemplate(ResourceType.Api, exportSwaggerDefinition:true);
             Assert.IsNotNull(api);
             var properties = api.Index(Arm.Properties);
-            Assert.AreEqual("swagger-json", properties.Value(Arm.ContentFormat));
-            var content = properties?.Value(Arm.ContentValue);
+            Assert.AreEqual("swagger-json", properties.Value(Arm.format));
+            var content = properties?.Value(Arm.value);
             Assert.IsNotNull(content);
             Assert.IsTrue(content.Contains("\"swagger\": \"2.0\","));
         }
@@ -635,7 +635,7 @@ namespace APIManagementTemplate.Test
         {
             var api = GetResourceFromTemplate(ResourceType.Api, exportSwaggerDefinition:true);
             Assert.IsNotNull(api);
-            var json =api.Index(Arm.Properties)?.Index(Arm.ContentValue).Value<string>();
+            var json =api.Index(Arm.Properties)?.Index(Arm.value).Value<string>();
             var jobject = JObject.Parse(json);
             Assert.AreEqual("ibizmalotest-backend.azure-api.net", jobject.Value(Arm.Host));
             Assert.AreEqual("/tfsBackend", jobject.Value(Arm.BasePath));

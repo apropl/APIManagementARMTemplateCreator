@@ -16,8 +16,8 @@ namespace APIManagementTemplate.Test
         Name,
         [Description("parameters")]
         Parameters,
-        [Description("contentValue")]
-        ContentValue,
+        [Description("value")]
+        value,
         [Description("policyContent")]
         PolicyContent,
         [Description("type")]
@@ -56,8 +56,8 @@ namespace APIManagementTemplate.Test
         DefaultValue,
         [Description("host")]
         Host,
-        [Description("contentFormat")]
-        ContentFormat,
+        [Description("format")]
+        format,
         [Description("alwaysLog")]
         AlwaysLog,
         [Description("apiVersion")]

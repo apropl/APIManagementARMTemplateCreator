@@ -23,14 +23,14 @@ namespace APIManagementTemplate.Test
         }
 
         [TestMethod]
-        public void TestResultContainsAPIFor_echoAPI_without_contentFormat_and_contentValue()
+        public void TestResultContainsAPIFor_echoAPI_without_format_and_value()
         {
             var echoApiTemplate = _generatedTemplates.With(Filename.Echo);
             Assert.IsNotNull(echoApiTemplate);
             var echoApi = echoApiTemplate.WithDirectResource(ResourceType.Api);
             Assert.IsNotNull(echoApi);
-            Assert.AreEqual(null , echoApi.Index(Arm.Properties).Value(Arm.ContentFormat));
-            Assert.AreEqual(null , echoApi.Index(Arm.Properties).Value(Arm.ContentValue));
+            Assert.AreEqual(null , echoApi.Index(Arm.Properties).Value(Arm.format));
+            Assert.AreEqual(null , echoApi.Index(Arm.Properties).Value(Arm.value));
         }
 
         [TestMethod]
@@ -43,7 +43,7 @@ namespace APIManagementTemplate.Test
 
             var policy = policies.First();
             var properties = policy.Index(Arm.Properties);
-            Assert.AreEqual("xml-link", properties.Value(Arm.ContentFormat));
+            Assert.AreEqual("xml-link", properties.Value(Arm.format));
             Assert.AreEqual("[concat(parameters('repoBaseUrl'), '/api-Versioned-HTTP-bin-API/v2/api-Versioned-HTTP-bin-API.v2.policy.xml', parameters('_artifactsLocationSasToken'))]", 
                 properties.Value(Arm.PolicyContent));
         }
@@ -109,7 +109,8 @@ namespace APIManagementTemplate.Test
             Assert.IsTrue(parameters.Cast<JProperty>().Any(x => x.Name == "service_PreDemoTest_name"));
             Assert.IsTrue(parameters.Cast<JProperty>().Any(x => x.Name == "repoBaseUrl"));
             Assert.IsTrue(parameters.Cast<JProperty>().Any(x => x.Name == "_artifactsLocationSasToken"));
-            Assert.AreEqual(3, parameters.Count());
+            Assert.IsTrue(parameters.Cast<JProperty>().Any(x => x.Name == "httpBinAPI-v2_serviceUrl"));
+            Assert.AreEqual(4, parameters.Count());
         }
 
         [TestMethod]

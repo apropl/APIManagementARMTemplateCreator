@@ -399,7 +399,7 @@ namespace APIManagementTemplate
             JObject item = JObject.FromObject(api);
             var fileInfo = GetFilenameAndDirectoryForSwaggerFile(api, parsedTemplate);
             ReplaceSwaggerWithFileLink(item, fileInfo);
-            var allowed = new[] { "contentFormat", "contentValue", "path", "serviceUrl", "protocols" };
+            var allowed = new[] { "format", "value", "path", "serviceUrl", "protocols", "displayName" };
             item["properties"].Cast<JProperty>().Where(p => !allowed.Any(a => a == p.Name)).ToList().ForEach(x => x.Remove());
             item["resources"].Where(x => _swaggerTemplateApiResourceTypes.All(r => r != x.Value<string>("type")) )
                 .ToList().ForEach(x => x.Remove());
@@ -427,8 +427,8 @@ namespace APIManagementTemplate
         private void GenerateSwaggerTemplate(JObject parsedTemplate, bool separatePolicyFile, IEnumerable<JToken> apis, List<GeneratedTemplate> templates)
         {
             AddParametersForFileLink(parsedTemplate);
-            var apisWithSwagger = apis.Where(x => x["properties"].Value<string>("contentFormat") == "swagger-json" &&
-                                                  x["properties"].Value<string>("contentValue") != null);
+            var apisWithSwagger = apis.Where(x => x["properties"].Value<string>("format") == "swagger-json" &&
+                                                  x["properties"].Value<string>("value") != null);
             foreach (var apiWithSwagger in apisWithSwagger)
             {
                 GeneratedTemplate generatedTemplate = new GeneratedTemplate();
@@ -448,7 +448,7 @@ namespace APIManagementTemplate
                 GeneratedTemplate generatedSwagger = new GeneratedTemplate();
                 SetFilenameAndDirectory(apiWithSwagger, parsedTemplate, generatedSwagger, true);
                 generatedSwagger.FileName = generatedSwagger.FileName.Replace("swagger.template.json", "swagger.json");
-                generatedSwagger.Content = JObject.Parse(apiWithSwagger["properties"].Value<string>("contentValue"));
+                generatedSwagger.Content = JObject.Parse(apiWithSwagger["properties"].Value<string>("value"));
                 templates.Add(generatedSwagger);
             }
         }
@@ -675,7 +675,7 @@ namespace APIManagementTemplate
             if (policy != null)
             {
                 policy["apiVersion"] = "2019-01-01";
-                var policyPropertyName = policy["properties"].Value<string>("format") == null ? "contentFormat" : "format";
+                var policyPropertyName = policy["properties"].Value<string>("format") == null ? "format" : "format";
                 policy["properties"][policyPropertyName] = "xml-link";
                 policyPropertyName = policy["properties"].Value<string>("policyContent") == null ? "value" : "policyContent";
                 policy["properties"][policyPropertyName] = $"[concat(parameters('repoBaseUrl'), '/product-{productId}/product-{productId}.policy.xml', parameters('{TemplatesStorageAccountSASToken}'))]";
@@ -706,7 +706,7 @@ namespace APIManagementTemplate
 
         private static void ReplacePolicyWithFileLink(JToken policy, FileInfo fileInfo)
         {
-            var policyPropertyName = policy["properties"].Value<string>("format") == null ? "contentFormat" : "format";
+            var policyPropertyName = policy["properties"].Value<string>("format") == null ? "format" : "format";
             policy["properties"][policyPropertyName] = "xml-link";
             policy["apiVersion"] = "2019-01-01";
             string formattedDirectory = fileInfo.Directory.Replace(@"\", "/");
@@ -721,11 +721,11 @@ namespace APIManagementTemplate
 
         private static void ReplaceSwaggerWithFileLink(JToken policy, FileInfo fileInfo)
         {
-            policy["properties"]["contentFormat"] = "swagger-link-json";
+            policy["properties"]["format"] = "swagger-link-json";
             policy["apiVersion"] = "2019-01-01";
             string formattedDirectory = fileInfo.Directory.Replace(@"\", "/");
             var directory = $"/{formattedDirectory}";
-            policy["properties"]["contentValue"] =
+            policy["properties"]["value"] =
                 $"[concat(parameters('repoBaseUrl'), '{directory}/{fileInfo.FileName}', parameters('{TemplatesStorageAccountSASToken}'))]";
         }
 
@@ -778,8 +778,8 @@ namespace APIManagementTemplate
             }
             if (separateSwaggerFile)
             {
-                ((JObject)apiObject["properties"]).Property("contentFormat").Remove();
-                ((JObject)apiObject["properties"]).Property("contentValue").Remove();
+                ((JObject)apiObject["properties"]).Property("format").Remove();
+                ((JObject)apiObject["properties"]).Property("value").Remove();
                 apiObject["resources"].Where(x => _swaggerTemplateApiResourceTypes.Any(p => p == x.Value<string>("type")))
                     .ToList().ForEach(x => x.Remove());
             }

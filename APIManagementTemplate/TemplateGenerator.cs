@@ -256,9 +256,9 @@ namespace APIManagementTemplate
                     }
                     if (exportSwaggerDefinition)
                     {
-                        apiTemplateResource["properties"]["contentFormat"] = "swagger-json";
+                        apiTemplateResource["properties"]["format"] = "swagger-json";
                         var swaggerExport = await resourceCollector.GetResource(id + "?format=swagger-link&export=true", apiversion: "2019-01-01");
-                        var swaggerUrl = swaggerExport.Value<string>("link");
+                        var swaggerUrl = swaggerExport.TryGetValue("link", out var tmpUrl) ? swaggerExport.Value<string>("link") : swaggerExport.Value<JToken>("value").Value<string>("link");
                         var swaggerContent = await resourceCollector.GetResourceByURL(swaggerUrl);
                         var serviceUrl = apiInstance["properties"].Value<string>("serviceUrl");
                         if (!String.IsNullOrWhiteSpace(serviceUrl))
@@ -268,7 +268,7 @@ namespace APIManagementTemplate
                             swaggerContent["basePath"] = serviceUri.AbsolutePath;
                             swaggerContent["schemes"] = JArray.FromObject(new[] { serviceUri.Scheme });
                         }
-                        apiTemplateResource["properties"]["contentValue"] = swaggerContent.ToString();
+                        apiTemplateResource["properties"]["value"] = swaggerContent.ToString();
                     }
 
                     var apiPolicies = await resourceCollector.GetResource(id + "/policies");
@@ -791,7 +791,7 @@ namespace APIManagementTemplate
             var policyPropertyName = policy["properties"].Value<string>("policyContent") == null ? "value" : "policyContent";
             File.WriteAllText(Path.Combine(separatePolicyOutputFolder, $"{policyName}.xml"), policy["properties"].Value<string>(policyPropertyName));
             policy["properties"][policyPropertyName] = $"[concat(parameters('{TemplatesGenerator.TemplatesStorageAccount}'), parameters('{TemplatesGenerator.TemplatesStorageBlobPrefix}'), '/{separatePolicyOutputFolder}/{policyName}.xml', parameters('{TemplatesGenerator.TemplatesStorageAccountSASToken}'))]";
-            policyPropertyName = policy["properties"].Value<string>("format") == null ? "contentFormat" : "format";
+            policyPropertyName = policy["properties"].Value<string>("format") == null ? "format" : "format";
             policy["properties"][policyPropertyName] = "xml-link";
 
             // Add repository parameters to the template.

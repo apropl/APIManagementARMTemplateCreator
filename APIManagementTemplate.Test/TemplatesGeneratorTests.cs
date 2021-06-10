@@ -177,7 +177,7 @@ namespace APIManagementTemplate.Test
         private static void AssertFileLink(JToken policy, string path)
         {
             JToken properties = policy["properties"];
-            Assert.AreEqual("xml-link", properties.Value<string>("contentFormat"));
+            Assert.AreEqual("xml-link", properties.Value<string>("format"));
             Assert.AreEqual(
                 $"[concat(parameters('repoBaseUrl'), '{path}', parameters('{TemplatesGenerator.TemplatesStorageAccountSASToken}'))]",
                 properties.Value<string>("policyContent"));
