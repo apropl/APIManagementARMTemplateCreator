@@ -3,6 +3,8 @@ using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
+using System.Security.Cryptography.X509Certificates;
 using System.Text.RegularExpressions;
 
 namespace APIManagementTemplate
@@ -176,12 +178,31 @@ namespace APIManagementTemplate
         private IEnumerable<GeneratedTemplate> GenerateAPIMasterTemplate(List<GeneratedTemplate> templates, JObject parsedTemplate, bool separatePolicyFile, bool apiStandalone)
         {
             var masterApis = new List<GeneratedTemplate>();
-            foreach (var versionSet in templates.Where(x => x.FileName.EndsWith(".version-set.template.json")))
+
+            //Check each versionset directory
+            List<string> usedDirectories = new List<string>();
+            foreach (var versionSetDirectory in templates.Where(x => x.FileName.EndsWith(".version-set.template.json")))
             {
+                usedDirectories.Add(versionSetDirectory.Directory); //assuming versionsets are allways in separate directories
                 masterApis.Add(GeneratedMasterTemplate2(parsedTemplate, separatePolicyFile,
-                    $"{versionSet.Directory}.master.template.json", versionSet.Directory,
-                    templates.Where(x => x.Directory.StartsWith(versionSet.Directory) && x.Type == ContentType.Json && !x.FileName.EndsWith(".swagger.json")), templates.Where(x => x.Type == ContentType.Json).ToList()));
+                    $"{versionSetDirectory.Directory}.master.template.json", versionSetDirectory.Directory,
+                    templates.Where(x => x.Directory.StartsWith(versionSetDirectory.Directory) && x.Type == ContentType.Json && !x.FileName.EndsWith(".swagger.json")), templates.Where(x => x.Type == ContentType.Json).ToList()));
             }
+
+            //Check each other directory
+            foreach (var otherDirectory in templates.Where(x => (!string.IsNullOrWhiteSpace(x.Directory) && (!x.FileName.EndsWith(".swagger.template.json") && x.FileName.EndsWith(".template.json")))))
+            {
+                //Check if directory allready used in versionset...
+                if (!usedDirectories.Contains(otherDirectory.Directory))
+                {
+                    usedDirectories.Add(otherDirectory.Directory); //add this directory to used directories
+                    masterApis.Add(GeneratedMasterTemplate2(parsedTemplate, separatePolicyFile,
+                    $"{otherDirectory.Directory}.master.template.json", otherDirectory.Directory,
+                    templates.Where(x => x.Directory.StartsWith(otherDirectory.Directory) && x.Type == ContentType.Json && !x.FileName.EndsWith(".swagger.json")), templates.Where(x => x.Type == ContentType.Json).ToList()));
+                }                
+            }
+
+            //If no versionset, create a mastertemplate file from the template.json 
             return masterApis;
         }
 
