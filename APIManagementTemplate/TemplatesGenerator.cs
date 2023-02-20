@@ -189,17 +189,13 @@ namespace APIManagementTemplate
                     templates.Where(x => x.Directory.StartsWith(versionSetDirectory.Directory) && x.Type == ContentType.Json && !x.FileName.EndsWith(".swagger.json")), templates.Where(x => x.Type == ContentType.Json).ToList()));
             }
 
-            //Check each other directory
-            foreach (var otherDirectory in templates.Where(x => (!string.IsNullOrWhiteSpace(x.Directory) && (!x.FileName.EndsWith(".swagger.template.json") && x.FileName.EndsWith(".template.json")))))
+            //Check each other directory if directory no allready used in versionset...
+            foreach (var otherDirectory in templates.Where(x => (!string.IsNullOrWhiteSpace(x.Directory) && (!x.FileName.EndsWith(".swagger.template.json") && x.FileName.EndsWith(".template.json"))) && !usedDirectories.Contains(x.Directory)))
             {
-                //Check if directory allready used in versionset...
-                if (!usedDirectories.Contains(otherDirectory.Directory))
-                {
-                    usedDirectories.Add(otherDirectory.Directory); //add this directory to used directories
-                    masterApis.Add(GeneratedMasterTemplate2(parsedTemplate, separatePolicyFile,
-                    $"{otherDirectory.Directory}.master.template.json", otherDirectory.Directory,
-                    templates.Where(x => x.Directory.StartsWith(otherDirectory.Directory) && x.Type == ContentType.Json && !x.FileName.EndsWith(".swagger.json")), templates.Where(x => x.Type == ContentType.Json).ToList()));
-                }                
+                usedDirectories.Add(otherDirectory.Directory); //add this directory to used directories
+                masterApis.Add(GeneratedMasterTemplate2(parsedTemplate, separatePolicyFile,
+                $"{otherDirectory.Directory}.master.template.json", otherDirectory.Directory,
+                templates.Where(x => x.Directory.StartsWith(otherDirectory.Directory) && x.Type == ContentType.Json && !x.FileName.EndsWith(".swagger.json")), templates.Where(x => x.Type == ContentType.Json).ToList()));
             }
 
             //If no versionset, create a mastertemplate file from the template.json 
