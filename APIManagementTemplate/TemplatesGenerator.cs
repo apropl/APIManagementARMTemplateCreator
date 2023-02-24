@@ -189,8 +189,8 @@ namespace APIManagementTemplate
                     templates.Where(x => x.Directory.StartsWith(versionSetDirectory.Directory) && x.Type == ContentType.Json && !x.FileName.EndsWith(".swagger.json")), templates.Where(x => x.Type == ContentType.Json).ToList()));
             }
 
-            //Check each other directory if directory no allready used in versionset...
-            foreach (var otherDirectory in templates.Where(x => (!string.IsNullOrWhiteSpace(x.Directory) && (!x.FileName.EndsWith(".swagger.template.json") && x.FileName.EndsWith(".template.json"))) && !usedDirectories.Contains(x.Directory)))
+            //Check each other directory if directory not allready used in versionset...
+            foreach (var otherDirectory in templates.Where(x => (!string.IsNullOrWhiteSpace(x.Directory) && !usedDirectories.Any(y => x.Directory.StartsWith(y)))))
             {
                 usedDirectories.Add(otherDirectory.Directory); //add this directory to used directories
                 masterApis.Add(GeneratedMasterTemplate2(parsedTemplate, separatePolicyFile,
