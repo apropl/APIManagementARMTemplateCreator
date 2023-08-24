@@ -800,6 +800,13 @@ namespace APIManagementTemplate
                 apiObject["resources"].Where(x => _swaggerTemplateApiResourceTypes.Any(p => p == x.Value<string>("type")))
                     .ToList().ForEach(x => x.Remove());
             }
+
+            //If api is generated from a function app then it might not have a service URL on API level. This is not allowed on deploy. Set it to empty string instead
+            if (apiObject["properties"]["description"].Value<string>().ToLower().Contains("function app") && System.String.IsNullOrEmpty(apiObject["properties"]["serviceUrl"].Value<string>()))
+            {
+                apiObject["properties"]["serviceUrl"] = "";
+            }
+
             template.parameters = GetParameters(parsedTemplate["parameters"], apiObject);
             SetFilenameAndDirectory(apiObject, parsedTemplate, generatedTemplate, false);
             template.resources.Add(apiStandalone ? RemoveServiceDependencies(apiObject) : apiObject);
