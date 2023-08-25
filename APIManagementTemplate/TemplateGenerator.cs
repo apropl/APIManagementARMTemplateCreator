@@ -223,6 +223,12 @@ namespace APIManagementTemplate
                                             }
                                         }
                                     }
+                                    //If api is generated from a function app then it might not have a service URL on API level. This is not allowed on deploy
+                                    else if (bo.backendProperty.type == Property.PropertyType.Function && System.String.IsNullOrEmpty(apiInstance["properties"]["serviceUrl"].ToString()))
+                                    {
+                                        //Below removes serviceURL from *.swagger.template.json & template.json file
+                                        ((JObject)apiTemplateResource["properties"]).Property("serviceUrl").Remove();
+                                    }
                                 }
                             }
                             if (exportCertificates) await AddCertificate(policy, template);
@@ -268,7 +274,7 @@ namespace APIManagementTemplate
                             swaggerContent["basePath"] = serviceUri.AbsolutePath;
                             swaggerContent["schemes"] = JArray.FromObject(new[] { serviceUri.Scheme });
                         }
-                        apiTemplateResource["properties"]["value"] = swaggerContent.ToString();
+                            apiTemplateResource["properties"]["value"] = swaggerContent.ToString();
                     }
 
                     var apiPolicies = await resourceCollector.GetResource(id + "/policies");
