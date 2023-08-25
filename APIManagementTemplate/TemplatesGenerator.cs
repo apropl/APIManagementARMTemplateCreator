@@ -802,7 +802,7 @@ namespace APIManagementTemplate
             }
 
             //If api is generated from a function app then it might not have a service URL on API level. This is not allowed on deploy. Set it to empty string instead
-            if (apiObject["properties"]["description"].Value<string>().ToLower().Contains("function app") && System.String.IsNullOrEmpty(apiObject["properties"]["serviceUrl"].Value<string>()))
+            if (apiObject["properties"]["description"].ToString().ToLower().Contains("function app") && System.String.IsNullOrEmpty(apiObject["properties"]["serviceUrl"].ToString()))
             {
                 apiObject["properties"]["serviceUrl"] = "";
             }
