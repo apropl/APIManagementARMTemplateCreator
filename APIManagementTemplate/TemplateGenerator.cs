@@ -226,8 +226,12 @@ namespace APIManagementTemplate
                                     //If api is generated from a function app then it might not have a service URL on API level. This is not allowed on deploy
                                     else if (bo.backendProperty.type == Property.PropertyType.Function && System.String.IsNullOrEmpty(apiInstance["properties"]["serviceUrl"].ToString()))
                                     {
-                                        //Below removes serviceURL from *.swagger.template.json & template.json file
-                                        ((JObject)apiTemplateResource["properties"]).Property("serviceUrl").Remove();
+                                        //Below removes serviceURL from *.swagger.template.json & template.json file if it exists
+                                        var serviceUrlProperty = ((JObject)apiTemplateResource["properties"]).Property("serviceUrl");
+                                        if (serviceUrlProperty != null)
+                                        {
+                                            serviceUrlProperty.Remove();
+                                        }
                                     }
                                 }
                             }
