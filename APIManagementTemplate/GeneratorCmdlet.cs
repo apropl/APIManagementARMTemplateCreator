@@ -1,4 +1,4 @@
-using Microsoft.IdentityModel.Clients.ActiveDirectory;
+//using Microsoft.IdentityModel.Clients.ActiveDirectory;
 using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
@@ -6,6 +6,7 @@ using System.Linq;
 using System.Management.Automation;
 using System.Text;
 using System.Threading.Tasks;
+using System.Web;
 using System.Windows.Forms;
 
 namespace APIManagementTemplate
@@ -92,8 +93,8 @@ namespace APIManagementTemplate
 
             if (ClaimsDump == null)
             {
-                resourceCollector.token = String.IsNullOrEmpty(Token) ? resourceCollector.Login(TenantName) : Token;
-            }
+				resourceCollector.token = String.IsNullOrEmpty(Token) ? resourceCollector.Login(TenantName) : Token;
+			}
             else if (ClaimsDump.Contains("Token copied"))
             {
                 Token = Clipboard.GetText().Replace("Bearer ", "");

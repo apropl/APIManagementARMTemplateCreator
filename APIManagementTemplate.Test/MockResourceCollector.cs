@@ -40,7 +40,7 @@ namespace APIManagementTemplate.Test
 
         public string Login(string tenantName)
         {
-            return "mocked";
-        }
+			return "mocked";
+		}
     }
 }

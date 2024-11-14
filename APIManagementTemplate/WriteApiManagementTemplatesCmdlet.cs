@@ -1,6 +1,6 @@
 ﻿using System;
 using System.IO;
-using Microsoft.IdentityModel.Clients.ActiveDirectory;
+//using Microsoft.IdentityModel.Clients.ActiveDirectory;
 using Newtonsoft.Json.Linq;
 using System.Management.Automation;
 using System.Text;

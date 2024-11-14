@@ -1,5 +1,4 @@
-﻿using Microsoft.IdentityModel.Clients.ActiveDirectory;
-using Newtonsoft.Json.Linq;
+﻿using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -10,6 +9,7 @@ using System.Runtime.InteropServices.ComTypes;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using Microsoft.Identity.Client;
 
 namespace APIManagementTemplate
 {
@@ -18,26 +18,55 @@ namespace APIManagementTemplate
 
         public string DebugOutputFolder = "";
         public string token;
+		private readonly IPublicClientApplication _publicClientApp;
 
-
-        public AzureResourceCollector()  
+		public AzureResourceCollector()  
         {
+			_publicClientApp = PublicClientApplicationBuilder.Create(Constants.ClientId)
+			.WithRedirectUri(Constants.RedirectUrl)
+			.Build();
+		}
 
-        }
-        public string Login(string tenantName)
-        {
-            string authstring = Constants.AuthString;
-            if (!string.IsNullOrEmpty(tenantName))
-            {
-                authstring = authstring.Replace("common", tenantName);
-            }
-            AuthenticationContext ac = new AuthenticationContext(authstring, true);
+		// Asynchronous Login method
+		public string Login(string tenantName)
+		{
+			if (string.IsNullOrEmpty(tenantName))
+			{
+				tenantName = "common";
+			}
 
-            var ar = ac.AcquireTokenAsync(Constants.ResourceUrl, Constants.ClientId, new Uri(Constants.RedirectUrl), new PlatformParameters(PromptBehavior.RefreshSession)).GetAwaiter().GetResult();
-            token = ar.AccessToken;
-            return token;
-        }
-        private static HttpClient client = new HttpClient() { BaseAddress = new Uri("https://management.azure.com") };
+			// Define the scopes your app needs
+			var scopes = new[] { "https://management.azure.com/.default" }; // Example for Microsoft Azure Management API
+
+			// Try to get accounts from cache and use AcquireTokenSilent for a cached token
+			var accounts = _publicClientApp.GetAccountsAsync();
+			var test = accounts.Result;
+			var test2 = test.Count();
+
+			if (accounts.Result.Count() != 0)
+			{
+				var firstAccount = accounts.Result.FirstOrDefault();
+
+				var result = _publicClientApp.AcquireTokenSilent(scopes, firstAccount)
+				.WithTenantId(tenantName) // Use WithTenantId to set the tenant
+				.ExecuteAsync();
+
+				token = result.Result.AccessToken;
+			}
+			else
+			{
+				var result = _publicClientApp.AcquireTokenInteractive(scopes)
+				.WithTenantId(tenantName) // Use WithTenantId to set the tenant
+				.WithPrompt(Prompt.SelectAccount)
+				.ExecuteAsync();
+
+				token = result.Result.AccessToken;
+			}
+
+			return token;
+		}
+
+		private static HttpClient client = new HttpClient() { BaseAddress = new Uri("https://management.azure.com") };
 
         public async Task<JObject> GetResource(string resourceId, string suffix = "",string apiversion = "2019-01-01")
         {
